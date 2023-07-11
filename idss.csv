@@ -1,0 +1,16 @@
+batch_size,64
+epochs,100
+lr,5e-05
+L2_lambda,0
+L1_lambda,0
+name,"ublah_fearch_fe1_bz_64_epoch_100_lr_5e-05_do_0.2_fcdo_0.2_wd_0.5_alpha_[0.5, 0.5, 0.5, 0.5]_seed_1"
+fe_arch,fe1
+dropout,0.2
+fc_dropout,0.2
+wd,0.5
+dyn_drop,False
+alpha,"[0.5, 0.5, 0.5, 0.5]"
+gamma,2.0
+seed,1
+""
+ids,datasets

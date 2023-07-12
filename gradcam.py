@@ -168,17 +168,33 @@ def photo_dump():
 
         # normalize the heatmap
         heatmap /= torch.max(heatmap)
-        plt.imsave('heat.png',np.array(heatmap[:,:,4]))
-        heatmap = cv2.resize(np.array(heatmap[:,:,4]), (176,138))
+        #plt.imsave('heat.png',np.array(heatmap[:,:,4]))
+        heatmap = cv2.resize(np.array(heatmap[:,4,:]), (138,138))
         heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+             
+        #threshold and rescale
+        flat = np.matrix.flatten(heatmap) 
+        max_heat = np.max(flat)
+        print(max_heat)
+        flat = flat/(flat.max()/255.0)
+        thresh = 0.8*max_heat
+        dimension = np.shape(heatmap)
+        #flat = (flat-thresh)/(max_heat-thresh)
+        flat[flat<thresh] = 0 
+        #flat = (flat-thresh)/(max_heat-thresh) 
+        #flat[flat<0] = 0 
+        #print(sum(heatmap))
+        #flat = flat*255
+        heatmap=np.reshape(flat, dimension)
+        print(heatmap)
+        heatmap = cv2.applyColorMap(np.uint8(heatmap), cv2.COLORMAP_JET)
         plt.gray()
         template = nb.load('/home/groups/kpohl/t1_data/hand/template.nii.gz')
-        img=template.get_fdata()[:,:,int(138/2)]
+        img=template.get_fdata()[:,int(176/2),:]
         plt.imsave('template_slice.png',img)
 
         img = cv2.imread('template_slice.png')
-        img = cv2.resize(img, (176,138))      
+        img = cv2.resize(img, (138,138))      
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         sensitivity = 15
         lower_white = np.array([0,0,0])

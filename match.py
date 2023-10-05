@@ -12,7 +12,7 @@ import pandas as pd
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print("device:",device)
 
-data = pd.read_csv('/home/users/jmanasse/match_frame.csv')  
+data = pd.read_csv('/home/users/jmanasse/match_frame.csv')
 
 def matchGroup(data, group):
     # Split data into two groups
@@ -34,7 +34,7 @@ def matchGroup(data, group):
     # Construct the bipartite graph
     for i in range(N_etoh):
         for j in range(N_ctrl):
-            if np.abs(data1.iloc[i, 3] - data2.iloc[j, 3]) <= 0.5:
+            if np.abs(data1.iloc[i, 4] - data2.iloc[j, 4]) <= 1:
                 edgeNum += 1
                 s.append(i)
                 t.append(j + N_etoh)
@@ -55,14 +55,14 @@ def matchGroup(data, group):
     # Create a directed graph and find the max flow
     G = nx.DiGraph()
     G.add_edges_from(zip(s, t), capacity=weights)
-    flow_value, flow_dict = nx.maximum_flow(G, N_etoh + N_ctrl + 1, N_etoh + N_ctrl + 2, capacity='1.0')
+    flow_value, flow_dict = nx.maximum_flow(G, N_etoh + N_ctrl + 1, N_etoh + N_ctrl + 2, capacity=weights)
 
     # Extract selected samples
     selected_etoh = [i for i in range(N_etoh) if flow_dict[i] == 1]
     selected_ctrl = [i - N_etoh for i in range(N_etoh + N_ctrl) if flow_dict[i] == 1 and i >= N_etoh]
 
     # Perform a two-sample t-test on the first confounder between matched cohorts
-    t_stat, p_value = ttest_ind(data1.iloc[selected_etoh, 3], data2.iloc[selected_ctrl, 3])
+    t_stat, p_value = ttest_ind(data1.iloc[selected_etoh, 4], data2.iloc[selected_ctrl, 4])
     print(f'2 sample t-test of the first confounder between matched cohorts p value: {p_value}')
 
     # Find which samples are selected in the matched groups

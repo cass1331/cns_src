@@ -12,7 +12,7 @@ import pandas as pd
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print("device:",device)
 
-data = pd.read_csv('/home/users/jmanasse/match_frame.csv')
+data = pd.read_csv('match_frame.csv')
 
 def matchGroup(data, group):
     # Split data into two groups

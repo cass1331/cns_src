@@ -54,7 +54,8 @@ def matchGroup(data, group):
 
     # Create a directed graph and find the max flow
     G = nx.DiGraph()
-    G.add_edges_from(zip(s, t), capacity=weights)
+    G.add_weighted_edges_from(zip(s, t,weights))
+    #G.add_edges_from(zip(s, t), capacity=weights)
     flow_value, flow_dict = nx.maximum_flow(G, N_etoh + N_ctrl + 1, N_etoh + N_ctrl + 2, capacity=weights)
 
     # Extract selected samples
@@ -77,5 +78,5 @@ def matchGroup(data, group):
     return selected
 
 # Example usage:
-selected_samples = matchGroup(data, "hiv_labels")
+selected_samples = matchGroup(data, "ci_labels")
 print(selected_samples)

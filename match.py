@@ -34,7 +34,7 @@ def matchGroup(data, group):
     # Construct the bipartite graph
     for i in range(N_etoh):
         for j in range(N_ctrl):
-            if np.abs(data1.iloc[i, 4] - data2.iloc[j, 4]) <= 0.5:
+            if np.abs(data1.iloc[i, 3] - data2.iloc[j, 3]) <= 0.5:
                 edgeNum += 1
                 s.append(i)
                 t.append(j + N_etoh)
@@ -62,7 +62,7 @@ def matchGroup(data, group):
     selected_ctrl = [i - N_etoh for i in range(N_etoh + N_ctrl) if flow_dict[i] == 1 and i >= N_etoh]
 
     # Perform a two-sample t-test on the first confounder between matched cohorts
-    t_stat, p_value = ttest_ind(data1.iloc[selected_etoh, 4], data2.iloc[selected_ctrl, 4])
+    t_stat, p_value = ttest_ind(data1.iloc[selected_etoh, 3], data2.iloc[selected_ctrl, 3])
     print(f'2 sample t-test of the first confounder between matched cohorts p value: {p_value}')
 
     # Find which samples are selected in the matched groups

@@ -111,14 +111,18 @@ def photo_dump():
 
     num_mci = num_hiv = num_hand = 0
 
+    #initialize the model
+    net = net()
+    net.eval() 
     for (images, labels, actual_labels, datasets, ids, ages, genders,npzs)  in final_test_loader:
-        if actual_labels == 1: #MCI
+        pred = net(images.view(1, 1, 64, 64, 64).to(device).float())
+        if pred[0] = 1 and pred[1] = 0: #MCI
             avg_mci += images.view(1, 1, 64, 64, 64).to(device).float()
             num_mci += 1
-        elif actual_labels == 2: #HIV
+        elif pred[0] = 0 and pred[1] = 1: #HIV
             avg_hiv += images.view(1, 1, 64, 64, 64).to(device).float()
             num_hiv += 1
-        elif actual_labels == 3: #HAND
+        elif pred[0] = 1 and pred[1] = 1: #HAND
             avg_hand += images.view(1, 1, 64, 64, 64).to(device).float()
             num_hand += 1
         else:

@@ -112,6 +112,7 @@ def photo_dump():
     num_mci = num_hiv = num_hand = 0
 
     #initialize the model
+<<<<<<< HEAD
     network = net()
     network.eval() 
     for (images, labels, actual_labels, datasets, ids, ages, genders,npzs)  in final_test_loader:
@@ -124,6 +125,19 @@ def photo_dump():
             avg_hiv += images.view(1, 1, 64, 64, 64).to(device).float()
             num_hiv += 1
         elif pred[0] > 0.5 and pred[1] > 0.5: #HAND
+=======
+    net = net()
+    net.eval() 
+    for (images, labels, actual_labels, datasets, ids, ages, genders,npzs)  in final_test_loader:
+        pred = net(images.view(1, 1, 64, 64, 64).to(device).float())
+        if pred[0] > 0 and pred[1] < 0: #MCI
+            avg_mci += images.view(1, 1, 64, 64, 64).to(device).float()
+            num_mci += 1
+        elif pred[0] < 0 and pred[1] > 0: #HIV
+            avg_hiv += images.view(1, 1, 64, 64, 64).to(device).float()
+            num_hiv += 1
+        elif pred[0] > 0 and pred[1] > 0: #HAND
+>>>>>>> d2b392e4fe95be8404aee32f8e99eb4111a29bb6
             avg_hand += images.view(1, 1, 64, 64, 64).to(device).float()
             num_hand += 1
         else:

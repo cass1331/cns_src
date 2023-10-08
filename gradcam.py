@@ -111,14 +111,19 @@ def photo_dump():
 
     num_mci = num_hiv = num_hand = 0
 
+    #initialize the model
+    network = net()
+    network.eval() 
     for (images, labels, actual_labels, datasets, ids, ages, genders,npzs)  in final_test_loader:
-        if actual_labels == 1: #MCI
+        pred = network(images.view(1, 1, 64, 64, 64).to(device).float())[0]
+        #print(pred)
+        if pred[0] > 0.5 and pred[1] < 0.5: #MCI
             avg_mci += images.view(1, 1, 64, 64, 64).to(device).float()
             num_mci += 1
-        elif actual_labels == 2: #HIV
+        elif pred[0] < 0.5 and pred[1] > 0.5: #HIV
             avg_hiv += images.view(1, 1, 64, 64, 64).to(device).float()
             num_hiv += 1
-        elif actual_labels == 3: #HAND
+        elif pred[0] > 0.5 and pred[1] > 0.5: #HAND
             avg_hand += images.view(1, 1, 64, 64, 64).to(device).float()
             num_hand += 1
         else:
@@ -129,8 +134,8 @@ def photo_dump():
     imgs = [avg_mci/num_mci,avg_hiv/num_hiv,avg_hand/num_hand]
 
     for avg_img, label in zip(imgs, labels):
-        network = net()
-        network.eval()
+        #network = net()
+        #network.eval()
 
         pred = network(avg_img)
         print(pred)
@@ -173,20 +178,14 @@ def photo_dump():
         heatmap = np.uint8(255 * heatmap)
              
         #threshold and rescale
-        flat = np.matrix.flatten(heatmap) 
-        max_heat = np.max(flat)
-        print(max_heat)
-        flat = flat/(flat.max()/255.0)
-        thresh = 0.8*max_heat
-        dimension = np.shape(heatmap)
-        #flat = (flat-thresh)/(max_heat-thresh)
-        flat[flat<thresh] = 0 
-        #flat = (flat-thresh)/(max_heat-thresh) 
-        #flat[flat<0] = 0 
-        #print(sum(heatmap))
-        #flat = flat*255
-        heatmap=np.reshape(flat, dimension)
-        print(heatmap)
+        #flat = np.matrix.flatten(heatmap) 
+        #max_heat = np.max(flat)
+        #flat = flat/(flat.max()/255.0)
+        #thresh = 0.8*max_heat
+        #dimension = np.shape(heatmap)
+        #flat[flat<thresh] = 0 
+        #heatmap=np.reshape(flat, dimension)
+        
         heatmap = cv2.applyColorMap(np.uint8(heatmap), cv2.COLORMAP_JET)
         plt.gray()
         template = nb.load('/home/groups/kpohl/t1_data/hand/template.nii.gz')

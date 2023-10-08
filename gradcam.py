@@ -173,8 +173,14 @@ def photo_dump():
 
         # normalize the heatmap
         heatmap /= torch.max(heatmap)
+        heatmap = np.array(heatmap)
+        #mirror heatmap across vertical axis
+        heatmap_flipped = np.array(heatmap)[::-1, :, :]
+        heatmap = (heatmap+heatmap_flipped)/2
+        with open('heatmap'+label+'.npy', 'wb') as f:
+           np.save(f,heatmap)
         #plt.imsave('heat.png',np.array(heatmap[:,:,4]))
-        heatmap = cv2.resize(np.array(heatmap[:,4,:]), (138,138))
+        heatmap = cv2.resize(np.array(heatmap[4,:,:]), (138,176))
         heatmap = np.uint8(255 * heatmap)
              
         #threshold and rescale
@@ -189,11 +195,11 @@ def photo_dump():
         heatmap = cv2.applyColorMap(np.uint8(heatmap), cv2.COLORMAP_JET)
         plt.gray()
         template = nb.load('/home/groups/kpohl/t1_data/hand/template.nii.gz')
-        img=template.get_fdata()[:,int(176/2),:]
+        img=template.get_fdata()[int(138/2),:,:]
         plt.imsave('template_slice.png',img)
 
         img = cv2.imread('template_slice.png')
-        img = cv2.resize(img, (138,138))      
+        img = cv2.resize(img, (138,176))      
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         sensitivity = 15
         lower_white = np.array([0,0,0])

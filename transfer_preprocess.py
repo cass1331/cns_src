@@ -10,9 +10,22 @@ import nibabel as nib
 import pickle
 import gc
 
+seed = 72
+
+np.random.seed(seed)
 
 def get_fold_index(data,labels,datasets,ids,ages,genders,npzs,fold):
-        # set fold
+    #shuffle data
+    indices = np.arange(datasets.shape[0])
+    np.random.shuffle(indices)
+    data = data[indices]
+    labels = labels[indices]
+    datasets = datasets[indices]
+    ids = ids[indices]
+    ages = ages[indices]
+    genders = genders[indices]
+    npzs = npzs[indices]
+    # set fold
     fold_idx = []
 
     for i in range(0,len(labels)):
@@ -39,7 +52,7 @@ def get_fold_index(data,labels,datasets,ids,ages,genders,npzs,fold):
     test_ids = ids[test_idx]
     test_ages = ages[test_idx]
     test_genders = genders[test_idx]
-    test_npzs = genders[test_idx]
+    test_npzs = npzs[test_idx]
 
 
     return train_data, train_label, train_dataset, train_ids, train_ages, train_genders, train_npzs, test_data, test_label, test_dataset, test_ids, test_ages, test_genders, test_npzs

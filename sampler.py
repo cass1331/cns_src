@@ -153,14 +153,13 @@ class UCSFSampler(torch.utils.data.sampler.Sampler):
     def __init__(self, dataset,  batch_size, num_batches = 27,status = None):
         self.status = status
         self.batch_size = batch_size
-        self.dataset = ['ucsf']
         loader = DataLoader(dataset)
         labels_list = []
         datasets_list = []
-        for images, labels, actual_labels, datasets,ids,ages,genders,npzs in loader:
+        for images, labels, actual_labels, ids,ages,genders,npzs in loader:
             labels_list.append(actual_labels)
 
-            datasets_list.append(datasets[0])
+            #datasets_list.append(datasets[0])
 
         self.num_batches = num_batches #math.ceil( len(labels_list)/batch_size)
 
@@ -170,7 +169,7 @@ class UCSFSampler(torch.utils.data.sampler.Sampler):
         temp = np.copy(labels_list)
 #         print(temp)
 #         print(datasets_list)
-        temp[datasets_list!='ucsf'] = -99
+        #temp[datasets_list!='ucsf'] = -99
         ucsf_labels_list=temp
         self.ucsf_label_to_indices = {label: np.where(ucsf_labels_list == label)[0]
                                  for label in [0,1,2,3]}
@@ -386,9 +385,8 @@ class PairedSampler(torch.utils.data.sampler.Sampler):
         loader = DataLoader(dataset)
         labels_list = []
         #only retrieve sample labels from UCSF dataset
-        for images, labels, actual_labels, datasets,ids,ages,genders,_ in loader:
-            if datasets[0] == 'ucsf':
-                labels_list.append(actual_labels)
+        for images, labels, actual_labels,ids,ages,genders,npzs in loader:
+            labels_list.append(actual_labels)
         self.num_batches = num_batches #math.ceil( len(labels_list)/batch_size)
 
         ucsf_labels_list=np.array(labels_list)
@@ -416,28 +414,20 @@ class PairedSampler(torch.utils.data.sampler.Sampler):
         all_index[1] = ucsf_1
         all_index[2] = ucsf_2
         all_index[3] = ucsf_3
-
         #shuffle indices for each label
         for i in range(0,4):
             np.random.shuffle(all_index[i])
-
-        # print({idx: len(vals) for idx,vals in all_index.items()})
-
         all_index_copy = copy.deepcopy(all_index)
-
         indices = []
         output = {}
-
         #make each batch (a list of indices drawn with replacement per label)
         for i in range(0,self.num_batches):
             output[i]=[]
             self.get_index(all_index, output[i],all_index_copy)
-
         #'flatten' batch dictionary into list
         for i in range(0,self.num_batches):
             indices.extend(output[i])
     
-
         #return iterator yielding pairs (0,0) --> (1,1) --> (2,2) --> (3,3) --> (0,0) --> ...
         return iter(indices)
 
@@ -486,20 +476,19 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
         missing_labels_list = []
 
         #only retrieve sample labels containing NPZ scores from UCSF dataset
-        for (i, (images, labels, actual_labels, datasets,ids,ages,genders,npzs)) in enumerate(loader):
+        for (i, (images, labels, actual_labels,ids,ages,genders,npzs)) in enumerate(loader):
             if npzs != 99.0 and not math.isnan(npzs):
-                npz_labels_list.append((i,actual_labels))
+                npz_labels_list.append((i,int(actual_labels)))
             else:
-                missing_labels_list.append((i,actual_labels))
+                missing_labels_list.append((i,int(actual_labels)))
 
         self.num_batches = num_batches #math.ceil( len(labels_list)/batch_size)
 
         npz_labels_list=np.array(npz_labels_list)
         missing_labels_list=np.array(missing_labels_list)
         
-
         #dict=label:indices where labels occurs
-
+    
         self.npz_label_to_indices = {0:[], 1: [], 2: [], 3:[]}
         for (i,actual_labels) in npz_labels_list:
             self.npz_label_to_indices[actual_labels].append(i)
@@ -538,7 +527,7 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
         #shuffle indices for each label
         for i in range(0,4):
             np.random.shuffle(npz_index[i])
-
+        npz_index_copy = copy.deepcopy(npz_index)
         #retrieve indices with each label
         missing_0 = list(np.copy(self.missing_label_to_indices[0]))
         missing_1 = list(np.copy(self.missing_label_to_indices[1]))
@@ -552,14 +541,12 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
         missing_index[2] = missing_2
         missing_index[3] = missing_3
 
-        # print(missing_index)
-        # print(npz_index)
         #shuffle indices for each label
         for i in range(0,4):
             np.random.shuffle(missing_index[i])
             #all_index[i] = np.concatenate((npz_index[i], missing_index[i]), axis=None)
 
-        npz_index_copy = copy.deepcopy(npz_index)
+        
         missing_index_copy = copy.deepcopy(missing_index)
         # print({idx: len(vals) for idx,vals in npz_index.items()}, {idx: len(vals) for idx,vals in missing_index.items()})
 
@@ -585,6 +572,7 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
 
     def get_index(self, npz_index, missing_index, output, npz_index_copy, missing_index_copy):
 
+        #class_size=5
         class_size = 10 #this is a magic number and I'm not sure how it was determined :(
         for i in range(0,class_size):
 
@@ -597,10 +585,7 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
                 if len(npz_index[j])>1:
                     pair = (npz_index[j].pop(0), npz_index[j].pop(0))
                 elif len(missing_index[j])>1:
-                    if len(npz_index[j])==1:
-                        pair = (npz_index[j].pop(0), missing_index[j].pop(0))
-                    else:
-                        pair = (missing_index[j].pop(0), missing_index[j].pop(0))
+                    pair = (missing_index[j].pop(0), missing_index[j].pop(0))
                 #otherwise, 'refresh' list and shuffle again
                 else:
                     npz_index[j] = list(np.copy(npz_index_copy[j]))
@@ -609,6 +594,9 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
                     missing_index[j] = list(np.copy(missing_index_copy[j]))
                     np.random.shuffle(missing_index[j])
 
-                    pair = (npz_index[j].pop(0), npz_index[j].pop(0))
+                    if len(npz_index[j])>1:
+                        pair = (npz_index[j].pop(0), npz_index[j].pop(0))
+                    elif len(missing_index[j])>1:
+                        pair = (missing_index[j].pop(0), missing_index[j].pop(0))
                 output.append(pair)
 

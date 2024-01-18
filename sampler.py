@@ -465,7 +465,9 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
     BatchSampler - from a MNIST-like dataset, samples n_classes and within these classes samples n_samples.
     Returns batches of size n_classes * n_samples
 
-    Only return UCSF data
+    PairedSamplerNPZ -- __iter__ returns paired samples such that (1) both samples have the same label
+    (2) both samples either have or do not have a known NPZ score (3) sampling is weighted to provide 
+    an equal number of each label 
     """
 
     def __init__(self, dataset,  batch_size, num_batches = 27, status = None):
@@ -489,22 +491,26 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
         
         #dict=label:indices where labels occurs
     
-        self.npz_label_to_indices = {0:[], 1: [], 2: [], 3:[]}
+        #self.npz_label_to_indices = {0:[], 1: [], 2: [], 3:[]}
+        self.npz_label_to_indices = {0:[], 1: [], 2: []}
         for (i,actual_labels) in npz_labels_list:
             self.npz_label_to_indices[actual_labels].append(i)
 
-        self.missing_label_to_indices = {0:[], 1: [], 2: [], 3:[]}
+        #self.missing_label_to_indices = {0:[], 1: [], 2: [], 3:[]}
+        self.missing_label_to_indices = {0:[], 1: [], 2: []}
         for (i,actual_labels) in missing_labels_list:
             self.missing_label_to_indices[actual_labels].append(i)
        
 
         #just a list of all indices
         self.all_npz_index = []
-        for l in [0,1,2,3]:
+        #for l in [0,1,2,3]:
+        for l in [0,1,2]:
             self.all_npz_index.extend(self.npz_label_to_indices[l])
         
         self.all_missing_index = []
-        for l in [0,1,2,3]:
+        #for l in [0,1,2,3]:
+        for l in [0,1,2:
             self.all_missing_index.extend(self.missing_label_to_indices[l])
 
 
@@ -515,34 +521,38 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
         npz_0 = list(np.copy(self.npz_label_to_indices[0]))
         npz_1 = list(np.copy(self.npz_label_to_indices[1]))
         npz_2 = list(np.copy(self.npz_label_to_indices[2]))
-        npz_3 = list(np.copy(self.npz_label_to_indices[3]))
+        #npz_3 = list(np.copy(self.npz_label_to_indices[3]))
 
         #dict=label:indices where labels occurs/same as ucsf_label_to_indices
         npz_index = {}
         npz_index[0] = npz_0
         npz_index[1] = npz_1
         npz_index[2] = npz_2
-        npz_index[3] = npz_3
+        #npz_index[3] = npz_3
 
         #shuffle indices for each label
-        for i in range(0,4):
+        
+        #for i in range(0,4):
+        for i in range(0,3):
             np.random.shuffle(npz_index[i])
         npz_index_copy = copy.deepcopy(npz_index)
+        
         #retrieve indices with each label
         missing_0 = list(np.copy(self.missing_label_to_indices[0]))
         missing_1 = list(np.copy(self.missing_label_to_indices[1]))
         missing_2 = list(np.copy(self.missing_label_to_indices[2]))
-        missing_3 = list(np.copy(self.missing_label_to_indices[3]))
+        #missing_3 = list(np.copy(self.missing_label_to_indices[3]))
 
         #dict=label:indices where labels occurs/same as ucsf_label_to_indices
         missing_index = {}
         missing_index[0] = missing_0
         missing_index[1] = missing_1
         missing_index[2] = missing_2
-        missing_index[3] = missing_3
+        #missing_index[3] = missing_3
 
         #shuffle indices for each label
-        for i in range(0,4):
+        #for i in range(0,4):
+        for i in range(0,3):
             np.random.shuffle(missing_index[i])
             #all_index[i] = np.concatenate((npz_index[i], missing_index[i]), axis=None)
 
@@ -563,7 +573,7 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
             indices.extend(output[i])
 
 
-        #return iterator yielding pairs (0,0) --> (1,1) --> (2,2) --> (3,3) --> (0,0) --> ...
+        #return iterator yielding pairs (0,0) --> (1,1) --> (2,2) --> (0,0) --> ...
         return iter(indices)
 
     def __len__(self):
@@ -577,7 +587,8 @@ class PairedSamplerNPZ(torch.utils.data.sampler.Sampler):
         for i in range(0,class_size):
 
             #for each label
-            for j in range(0,4):
+            for j in range(0,3):
+            #for j in range(0,4):
                 
                 pair = None
                 #while more than one index is yet unassigned,

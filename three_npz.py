@@ -85,7 +85,7 @@ if args.dyn_drop:
 else:
     args.name = args.name + '_fearch_' + args.fe_arch + '_bz_' + str(args.batch_size) + '_epoch_' + str(args.epochs) + '_lr_' + str(args.lr) + '_do_'+str(args.dropout) +'_fcdo_' + str(args.fc_dropout) + '_wd_' + str(args.wd) + '_alpha_'+str(args.alpha)+'_seed_'+str(seed)
 
-wandb.init(project="final npz", entity="jmanasse", config = {
+wandb.init(project="three npz", entity="jmanasse", config = {
   "learning_rate": args.lr,
   "epochs": args.epochs,
   "batch_size": args.batch_size,
@@ -93,7 +93,7 @@ wandb.init(project="final npz", entity="jmanasse", config = {
   'dropout': args.dropout,
   "weight decay": args.wd,
   "lambda": args.lamb,
-  'loss type': 'npz + loss'
+  'loss type': 'npz loss'
 })
 
 print("device:",device)
@@ -112,7 +112,7 @@ class NPZLoss(nn.Module):
         super(NPZLoss, self).__init__()
         self.criterion = torch.nn.BCEWithLogitsLoss(reduction= 'none').to(device)
     
-    def forward(self, pred_cd1, labels_cd, pred_hiv1, labels_hiv, emb1, emb2, npz1, npz2, tau, downgraded=False):
+    def forward(self, pred_cd1, labels_cd, pred_hiv1, labels_hiv, emb1, emb2, npz1, npz2, tau):
         losscd = self.criterion(pred_cd1, labels_cd).to(device)
         losshiv = self.criterion(pred_hiv1, labels_hiv).to(device)
         loss = torch.cat((losscd.unsqueeze(0), losshiv.unsqueeze(0)))
@@ -147,7 +147,7 @@ ucsf_criterion = NPZLoss()
 ucsf_test_criterion = XLoss()
 
 @torch.no_grad()
-def test(feature_extractor, classifier_ucsf, data,  ucsf_test_criterion, fold=None, epoch=None, mode='test'):
+def test(feature_extractor, classifier_ucsf, data,  ucsf_test_criterion, fold=None, epoch=None, mode='val'):
     '''implement testing loop for model. mode = 'train' 'val' or 'test' '''
     feature_extractor.eval()
     classifier_ucsf.eval()
@@ -159,39 +159,28 @@ def test(feature_extractor, classifier_ucsf, data,  ucsf_test_criterion, fold=No
                         num_workers=3)
 
     xentropy_loss_avg = 0.
-    npz_loss_avg = 0.
-    total_loss_avg = 0.
     correct = 0.
     total = 0.
-    toprint = 0
 
     overall_accuracy = 0.
-    correlation_ctrl = torch.tensor(0.)
-    correlation_hiv = torch.tensor(0.)
-
 
     accuracy_class = {}
     accuracy_class['ucsf'] = {}
-
-    accuracy_class['ucsf']['CTRL']=0
-    accuracy_class['ucsf']['MCI']=0
-    accuracy_class['ucsf']['HIV']=0
-    accuracy_class['ucsf']['MND']=0
-
+    if mode == 'train' or mode == 'val':
+       accuracy_class['ucsf']['CTRL']=0
+       accuracy_class['ucsf']['MCI']=0
+       accuracy_class['ucsf']['HIV']=0
+    else:
+       accuracy_class['ucsf']['HAND']=0
     accuracy_dataset = {}
     accuracy_dataset['ucsf']=0
 
     total_0_ucsf = 0.0
     total_1_ucsf = 0.0
     total_2_ucsf = 0.0
-    total_3_ucsf = 0.0
-
     total_ucsf = 0
 
-    feature_list = []
-    all_datasets = []
     all_ids = []
-
     all_preds = []
     all_genders = []
     all_ages = []
@@ -204,7 +193,6 @@ def test(feature_extractor, classifier_ucsf, data,  ucsf_test_criterion, fold=No
         num_batches += 1
     
     for i,(images, labels,actual_labels,ids, ages, genders, npzs) in enumerate(loader):
-        #datasets = np.array(datasets)
         ids = np.array(ids)
         actual_labels = np.array(actual_labels)
         images = images.to(device).float()
@@ -228,9 +216,8 @@ def test(feature_extractor, classifier_ucsf, data,  ucsf_test_criterion, fold=No
         xentropy_loss_cd = ucsf_test_criterion(pred_cd, labels_cd).to(device)
         xentropy_loss_hiv = ucsf_test_criterion(pred_hiv, labels_hiv).to(device)
         xentropy_loss = xentropy_loss_cd + xentropy_loss_hiv
-
-
         xentropy_loss_avg += xentropy_loss.item()
+
         pred_cur = copy.deepcopy(pred)
         pred_cd_copy = copy.deepcopy(pred_cd)
         pred_hiv_copy = copy.deepcopy(pred_hiv)
@@ -248,84 +235,57 @@ def test(feature_extractor, classifier_ucsf, data,  ucsf_test_criterion, fold=No
         correct += ((a==truth)&(b==truth)).sum().item()
         total += 1
 
-
-
-
-        feature_list.append(feature.cpu())
-        #all_datasets = np.append(all_datasets,datasets)
-        all_ids = np.append(all_ids, ids)
-        all_preds.extend(pred_cur.detach().cpu().numpy())
-        all_genders.extend(genders)
-        all_npzs.extend(npzs)
-        all_ages.extend(ages)
-        all_label_cd.extend(labels_cd.detach().cpu().numpy())
-        all_label_hiv.extend(labels_hiv.detach().cpu().numpy())
-
-        # ucsf
-        ucsf_pred_cd = pred_cd#[datasets=='ucsf']
-        ucsf_pred_hiv = pred_hiv#[datasets=='ucsf']
-        ucsf_pred_cd_copy = pred_cd_copy#[datasets=='ucsf']
-        ucsf_pred_hiv_copy = pred_hiv_copy#[datasets=='ucsf']
-        ucsf_labels_cd = labels_cd#[datasets=='ucsf']
-        ucsf_labels_hiv = labels_hiv#[datasets=='ucsf']
-        ucsf_actual_labels = actual_labels#[datasets=='ucsf']
-        ucsf_ids = ids#[datasets=='ucsf']
-        for j in range(0,len(ucsf_pred_cd)):
+        for j in range(0,len(pred_cd)):
             total_ucsf += 1
-            if train == False:
-
-                row = {'epoch':epoch, 'id':ucsf_ids[j], 'dataset':'UCSF', 'CD_pred':torch.sigmoid(ucsf_pred_cd_copy[j]).item(), 'HIV_pred':torch.sigmoid(ucsf_pred_hiv_copy[j]).item(), 'fold': fold,'CD_label':ucsf_labels_cd[j].item(), 'HIV_label':ucsf_labels_hiv[j].item()}
+            if mode == 'val' or mode == 'test':
+                row = {'epoch':epoch, 'id':ids[j], 'dataset':'UCSF', 'CD_pred':torch.sigmoid(pred_cd_copy[j]).item(), 'HIV_pred':torch.sigmoid(pred_hiv_copy[j]).item(), 'fold': fold,'CD_label':labels_cd[j].item(), 'HIV_label':labels_hiv[j].item()}
                 csv_logger_pred.writerow(row)
-
-            if ucsf_pred_cd[j] == 0 and ucsf_pred_hiv[j] == 0 :
+                if mode =='test':
+                   continue
+            actual_pred = None
+            if pred_cd[j] == 0 and pred_hiv[j] == 0 :
                 actual_pred = 0
-            elif ucsf_pred_cd[j] == 1 and ucsf_pred_hiv[j] == 0 :
+            elif pred_cd[j] == 1 and pred_hiv[j] == 0 :
                 actual_pred = 1
-            elif ucsf_pred_cd[j] == 0 and ucsf_pred_hiv[j] == 1 :
+            elif pred_cd[j] == 0 and pred_hiv[j] == 1 :
                 actual_pred = 2
-            elif ucsf_pred_cd[j] == 1 and ucsf_pred_hiv[j] == 1 :
-                actual_pred = 3
-
-            if ucsf_actual_labels[j] ==  0 :
+            
+            if actual_labels[j] ==  0 :
                 total_0_ucsf += 1
                 if actual_pred == 0   :
                     accuracy_class['ucsf']['CTRL'] += 1
                     accuracy_dataset['ucsf'] += 1
-            elif ucsf_actual_labels[j] ==  1 :
+            elif actual_labels[j] ==  1 :
                 total_1_ucsf += 1
                 if actual_pred == 1  :
                     accuracy_class['ucsf']['MCI'] += 1
                     accuracy_dataset['ucsf'] += 1
-            elif ucsf_actual_labels[j] ==  2 :
+            elif actual_labels[j] ==  2 :
                 total_2_ucsf += 1
                 if actual_pred == 2   :
                     accuracy_class['ucsf']['HIV'] += 1
                     accuracy_dataset['ucsf'] += 1
-            elif ucsf_actual_labels[j] ==  3 :
-                total_3_ucsf += 1
-                if actual_pred == 3 :
-                    accuracy_class['ucsf']['MND'] += 1
-                    accuracy_dataset['ucsf'] += 1
-
-    accuracy_class['ucsf']['CTRL'] = round(accuracy_class['ucsf']['CTRL'] / total_0_ucsf,3)
-    accuracy_class['ucsf']['MCI'] = round(accuracy_class['ucsf']['MCI'] / total_1_ucsf,3)
-    accuracy_class['ucsf']['HIV'] = round(accuracy_class['ucsf']['HIV'] / total_2_ucsf,3)
-    accuracy_class['ucsf']['MND']= round(accuracy_class['ucsf']['MND'] / total_3_ucsf,3)
-    
-
+            
+    if mode == 'val' or mode == 'train':
+        accuracy_class['ucsf']['CTRL'] = round(accuracy_class['ucsf']['CTRL'] / total_0_ucsf,3)
+        accuracy_class['ucsf']['MCI'] = round(accuracy_class['ucsf']['MCI'] / total_1_ucsf,3)
+        accuracy_class['ucsf']['HIV'] = round(accuracy_class['ucsf']['HIV'] / total_2_ucsf,3)
+   
     accuracy_dataset['ucsf'] = round(accuracy_dataset['ucsf'] / total_ucsf,3)
-    
+
+    if mode == 'test':
+        accuracy_class['ucsf']['HAND'] = accuracy_dataset['ucsf'] 
+
     print(accuracy_class, total_ucsf)
     overall_accuracy = (correct) / (total)
     overall_accuracy = round(overall_accuracy,3)
-
 
     xentropy_loss_avg = xentropy_loss_avg / (i + 1)
 
     return overall_accuracy, xentropy_loss_avg,accuracy_class, accuracy_dataset
 
 
-def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
+def train(feature_extractor,  classifier_ucsf, train_data, val_data, fold):
 
     feature_extractor.zero_grad()
     classifier_ucsf.zero_grad()
@@ -339,9 +299,7 @@ def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
     best_accuracy = 0
     best_epoch = 0
     epochs = args.epochs
-    ave_valid_acc_50 = 0.0
-    counter = 0.0
-    
+ 
     train_loader = DataLoader(dataset=train_data,
                               batch_size=args.batch_size,
                               sampler=PairedSamplerNPZ(dataset=train_data,
@@ -349,9 +307,6 @@ def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
                               shuffle=False,
                               pin_memory=True,
                               num_workers=3)
-
-    ucsf_criterion = NPZLoss()
-
     for epoch in range(epochs):
         feature_extractor.train()
         classifier_ucsf.train()
@@ -366,13 +321,10 @@ def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
         xentropy_loss_avg = 0.
         npz_loss_avg = 0.
         total_loss_avg = 0.
-        cur_loss_sum = 0
         correct = 0.
         total = 0.
-        ucsf_correct = 0.
-        ucsf_total = 0.
-        total = 0.
         overall_accuracy = 0
+        
         # batch accumulation parameter
         accum_iter = args.batch_size//2
         ###### "Training happens here! ######
@@ -385,7 +337,7 @@ def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
                 images1 = images[0][j].to(device).float()
                 images2 = images[1][j].to(device).float()
 
-                #get ages of pair
+                #get npzs of pair
                 npz1 = npzs[0][j].to(device).float()
                 npz2 = npzs[1][j].to(device).float()
 
@@ -443,14 +395,8 @@ def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
                 correct += ((a==truth)&(b==truth)).sum().item()
                 total += 2
 
-
             overall_accuracy= correct/total
 
-            # #step for each batch
-            # fe_optimizer.step()
-            # ucsf_optimizer.step()
-            # feature_extractor.zero_grad()
-            # classifier_ucsf.zero_grad()
             ###### End of "training" is here! ######
 
             progress_bar.set_postfix(
@@ -461,69 +407,54 @@ def train(feature_extractor,  classifier_ucsf, train_data, test_data, fold ):
             ucsf_scheduler.step()
 
         #evaluate model
-        test_acc, test_xentropy_loss,test_accuracy_class, test_accuracy_dataset = test(feature_extractor, classifier_ucsf, test_data, ucsf_test_criterion, fold =fold, epoch = epoch)
+        val_acc, val_xentropy_loss,val_accuracy_class, val_accuracy_dataset = test(feature_extractor, classifier_ucsf, val_data, ucsf_test_criterion, fold =fold, epoch = epoch, mode='val')
 
-        test_ucsf_ctrl = test_accuracy_class['ucsf']['CTRL']
-        test_ucsf_mci = test_accuracy_class['ucsf']['MCI']
-        test_ucsf_hiv = test_accuracy_class['ucsf']['HIV']
-        test_ucsf_mnd = test_accuracy_class['ucsf']['MND']
+        val_ucsf_ctrl = val_accuracy_class['ucsf']['CTRL']
+        val_ucsf_mci = val_accuracy_class['ucsf']['MCI']
+        val_ucsf_hiv = val_accuracy_class['ucsf']['HIV']
 
-        ucsf_test_acc = np.mean([test_ucsf_ctrl, test_ucsf_mci, test_ucsf_hiv, test_ucsf_mnd])
+        ucsf_val_acc = np.mean([val_ucsf_ctrl, val_ucsf_mci, val_ucsf_hiv])
 
-        test_accuracy_dataset['ucsf'] = round(ucsf_test_acc,3)
+        val_accuracy_dataset['ucsf'] = round(ucsf_val_acc,3)
 
-        print('test:',test_accuracy_class['ucsf'])
+        print('val:',val_accuracy_class['ucsf'])
 
-        # this trainning accuracy has augmentation in it!!!!!
+        # this training accuracy has augmentation in it!!!!!
         # some images are sampled more than once!!!!
-        train_acc, train_xentropy_loss, train_accuracy_class, train_accuracy_dataset  = test(feature_extractor, classifier_ucsf, train_data, ucsf_test_criterion, fold =fold, epoch = epoch, train =True)
+        train_acc, train_xentropy_loss, train_accuracy_class, train_accuracy_dataset  = test(feature_extractor, classifier_ucsf, train_data, ucsf_test_criterion, fold =fold, epoch = epoch, mode='train')
 
         train_ucsf_ctrl = train_accuracy_class['ucsf']['CTRL']
         train_ucsf_mci = train_accuracy_class['ucsf']['MCI']
         train_ucsf_hiv = train_accuracy_class['ucsf']['HIV']
-        train_ucsf_mnd = train_accuracy_class['ucsf']['MND']
 
         # redefine ucsf_train_acc, lab_val_acc to be the average of all classes
-        ucsf_train_acc = np.mean([train_ucsf_ctrl, train_ucsf_mci, train_ucsf_hiv, train_ucsf_mnd])
+        ucsf_train_acc = np.mean([train_ucsf_ctrl, train_ucsf_mci, train_ucsf_hiv])
 
         train_accuracy_dataset['ucsf'] = round(ucsf_train_acc,3)
 
         tqdm.write('train_acc: %.2f u_train_acc: %.2f' % (overall_accuracy, ucsf_train_acc))
-        tqdm.write('test_acc: %.2f u_test_acc: %.2f test_x_loss: %.2f' % (test_acc, ucsf_test_acc, test_xentropy_loss))
+        tqdm.write('val_acc: %.2f u_val_acc: %.2f val_x_loss: %.2f' % (val_acc, ucsf_val_acc, val_xentropy_loss))
 
-        # row = {'epoch': epoch, 'train_acc': round(overall_accuracy,3), 'test_acc': test_acc, 'train_loss':round((xentropy_loss_avg / (i + 1)),3),  'test_loss': round(test_loss,3),
-        #        'ucsf_train_acc': ucsf_train_acc,
-        #        'ucsf_test_acc': ucsf_test_acc,
-        #        'train_ucsf_ctrl':train_ucsf_ctrl, 'train_ucsf_mci':train_ucsf_mci,
-        #        'train_ucsf_hiv':train_ucsf_hiv, 'train_ucsf_mnd':train_ucsf_mnd,
-
-        #        'test_ucsf_ctrl':test_ucsf_ctrl, 'test_ucsf_mci':test_ucsf_mci,
-        #        'test_ucsf_hiv':test_ucsf_hiv, 'test_ucsf_mnd':test_ucsf_mnd}
-        # csv_logger.writerow(row)
 
         wandb.log({"xentropy loss": round((xentropy_loss_avg / (i + 1)),3),
-                   "age loss": round((npz_loss_avg / (i + 1)),3),
+                   "npz loss": round((npz_loss_avg / (i + 1)),3),
                    "total loss": round((total_loss_avg / (i + 1)),3),
 
-        "test xentropy loss":round(test_xentropy_loss,3),
-        'train_acc': round(overall_accuracy,3), 'test_acc': test_acc,'train_ucsf_ctrl':train_ucsf_ctrl, 'train_ucsf_mci':train_ucsf_mci,
-        'train_ucsf_hiv':train_ucsf_hiv, 'train_ucsf_mnd':train_ucsf_mnd,
-
-        'test_ucsf_ctrl':test_ucsf_ctrl, 'test_ucsf_mci':test_ucsf_mci,
-        'test_ucsf_hiv':test_ucsf_hiv, 'test_ucsf_mnd':test_ucsf_mnd})
-
+        "val xentropy loss":round(val_xentropy_loss,3),
+        'train_acc': round(overall_accuracy,3), 'val_acc': val_acc,
+        'train_ucsf_ctrl':train_ucsf_ctrl, 'train_ucsf_mci':train_ucsf_mci,'train_ucsf_hiv':train_ucsf_hiv,
+        'val_ucsf_ctrl':val_ucsf_ctrl, 'val_ucsf_mci':val_ucsf_mci, 'val_ucsf_hiv':val_ucsf_hiv})
 # # Optional
        # wandb.watch(feature_extractor)
        # wandb.watch(classifier_ucsf)
 
-
-        if test_acc > best_accuracy:
-            best_accuracy = test_acc
+        if val_acc > best_accuracy:
+            best_accuracy = val_acc
             best_epoch = epoch
 
     best_models = [feature_extractor, classifier_ucsf]
 
-    return test_acc, test_accuracy_class, test_accuracy_dataset, best_accuracy, best_epoch, best_models
+    return val_acc, val_accuracy_class, val_accuracy_dataset, best_accuracy, best_epoch, best_models
 
 def average_results(acc_each_class_list,acc_each_dataset_list):
     ave_acc_each_class_list = {}
@@ -563,9 +494,9 @@ if __name__ == '__main__':
                                               'ucsf_train_acc',
 
                                               'ucsf_test_acc',
-                                              'train_ucsf_ctrl','train_ucsf_mci', 'train_ucsf_hiv','train_ucsf_mnd',
+                                              'train_ucsf_ctrl','train_ucsf_mci', 'train_ucsf_hiv',
 
-                                              'test_ucsf_ctrl','test_ucsf_mci','test_ucsf_hiv','test_ucsf_mnd'],
+                                              'test_ucsf_ctrl','test_ucsf_mci','test_ucsf_hiv'],
                            filename=filename)
 
     filename2 = log_path + 'predictions/'+ args.name +'.csv'
@@ -589,7 +520,7 @@ if __name__ == '__main__':
         csv_logger.writerow(row)
         transformation = super_transformation()
         train_data = MRI_Dataset(fold = fold , stage= 'original_train',transform = transformation)
-        test_data = MRI_Dataset(fold = fold , stage= 'original_test')
+        val_data = MRI_Dataset(fold = fold , stage= 'original_val')
 
         print("Begin training fold ",fold)
 
@@ -599,30 +530,21 @@ if __name__ == '__main__':
                            fe_arch=args.fe_arch, dropout=args.dropout,
                            fc_dropout = args.fc_dropout, batch_size = args.batch_size).to(device)
         
-        #LOAD IN WEIGHTS FROM PRETRAINED MODEL (OPTIONAL) ENSURE THAT THE FeatureExtractor version is being used
-        #feature_extractor.load_state_dict(torch.load('curr_model.pth'), strict=False)
-
         classifier_ucsf = nn.Sequential(
-                    #nn.Linear(2048, 128),
                     nn.Linear(256, 128),
-                    nn.Dropout(0.25),
+                    #nn.Dropout(0.25),
                     nn.LeakyReLU(),
                     nn.Linear(128, 16),
                     nn.LeakyReLU(),    
                     nn.Linear(16, 2)).to(device)
 
 
-        test_acc, test_accuracy_class, test_accuracy_dataset, best_accuracy, best_epoch, best_models = train(feature_extractor,  classifier_ucsf, train_data,  test_data, fold = fold)
-
-
+        val_acc, val_accuracy_class, val_accuracy_dataset, best_accuracy, best_epoch, best_models = train(feature_extractor,  classifier_ucsf, train_data, val_data, fold = fold)
         feature_extractor, classifier_ucsf = best_models
         best_accuracy_list[fold] = best_accuracy
-        final_accuracy_list[fold] = test_acc
+        final_accuracy_list[fold] = val_acc
         best_epoch_list[fold] = best_epoch
 
-        # test_acc, test_xloss, test_ageloss, test_total_loss, test_accuracy_class, test_accuracy_dataset = test(feature_extractor, classifier_ucsf, test_loader, ucsf_criterion,  fold = fold, train =True)
-        # acc_each_class_list.append( test_accuracy_class)
-        # acc_each_dataset_list.append( test_accuracy_dataset)
         row = {'epoch': 'fold', 'train_acc': str(fold)}
         csv_logger.writerow(row)
         model_path = '/scratch/users/jmanasse/mri_ckpts/'
@@ -633,6 +555,11 @@ if __name__ == '__main__':
         os.makedirs(new_dir, exist_ok=True)
         torch.save(feature_extractor.state_dict(), new_dir + 'feature_extractor.pt')
         torch.save(classifier_ucsf.state_dict(), new_dir + 'classifier_ucsf.pt')
+
+    test_data = MRI_Dataset(fold = fold , stage= 'original_test')
+
+    test_accuracy, test_loss_avg, test_accuracy_class, test_accuracy_dataset = test(feature_extractor, classifier_ucsf, test_data,  ucsf_test_criterion, mode='test')
+    print('Accuracy on HAND class (held out): '+ str(test_accuracy*100) + '%')
 
     csv_logger_pred.close()
 
@@ -655,4 +582,3 @@ if __name__ == '__main__':
     csv_logger.close()
     csv_logger_pred.close()
     csv_logger_corr.close()
-
